@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGIS Kesesuaian Lahan Pemukiman</title>
+    
+    <!-- 1. Panggil Leaflet CSS & JS Paling Atas (Wajib agar tidak error 'L is not defined') -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. Pustaka JS dari Folder js/ qgis2web -->
+    <script src="js/qgis2web_expressions.js"></script>
+    <script src="js/L.Control.Layers.Tree.min.js"></script>
+    <script src="js/leaflet.rotatedMarker.js"></script>
+    <script src="js/leaflet.pattern.js"></script>
+    <script src="js/leaflet-hash.js"></script>
+    <script src="js/Autolinker.min.js"></script>
+    <script src="js/rbush.min.js"></script>
+    <script src="js/labelgun.min.js"></script>
+    <script src="js/labels.js"></script>
+
+    <!-- 3. File Data Spasial Kamu -->
+    <script src="data/ADMINISTRASI_AR_DESAKEL_1.js"></script>
+    <script src="data/HASIL_2.js"></script>
+
+    <style>
+        #map { height: calc(100vh - 64px); }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans flex flex-col h-screen">
+
+    <!-- Header -->
+    <header class="bg-emerald-800 text-white h-16 flex items-center justify-between px-6 shadow-md z-10">
+        <h1 class="text-xl font-bold tracking-wide">Peta Analisis Kesesuaian Lahan Pemukiman</h1>
+        <span class="text-sm bg-emerald-900 px-3 py-1 rounded-full border border-emerald-700">WebGIS Interaktif</span>
+    </header>
+
+    <!-- Main Container -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- Sidebar Panel -->
+        <aside class="w-80 bg-white border-r shadow-lg flex flex-col p-4 z-10 overflow-y-auto">
+            <h2 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">Informasi & Ringkasan</h2>
+            
+            <!-- Filter Dropdown 3 Kelas -->
+            <div class="mb-4">
+                <label for="classFilter" class="block text-xs font-medium text-gray-600 mb-1">Filter Kelas Kesesuaian:</label>
+                <select id="classFilter" onchange="filterByClass()" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <option value="all">-- Tampilkan Semua Kelas --</option>
+                    <option value="sangat sesuai">Sangat Sesuai (S1)</option>
+                    <option value="sesuai">Sesuai (S2)</option>
+                    <option value="tidak sesuai">Tidak Sesuai (N)</option>
+                </select>
+            </div>
+
+            <!-- Legenda Jumlah Poligon -->
+            <div class="mb-5 bg-gray-50 p-3 rounded-lg border">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Ringkasan Klasifikasi</h3>
+                <div id="legendContainer" class="space-y-2 text-sm text-gray-600"></div>
+            </div>
+
+            <!-- Deskripsi Kriteria Kesesuaian Lahan Pemukiman -->
+            <div class="space-y-3">
+                <h3 class="text-sm font-semibold text-gray-800 border-b pb-1">Kriteria Kesesuaian Pemukiman</h3>
+                
+                <!-- Sangat Sesuai -->
+                <div class="p-2.5 bg-green-50 border-l-4 border-green-700 rounded-r shadow-sm">
+                    <div class="flex items-center space-x-1.5 font-bold text-green-800 text-xs mb-1">
+                        <span class="w-2.5 h-2.5 rounded-full bg-green-700"></span>
+                        <span>Sangat Sesuai (S1)</span>
+                    </div>
+                    <p class="text-[11px] text-gray-600 leading-relaxed">
+                        Lahan datar/landai (lereng &lt; 8%), bebas ancaman banjir/longsor, daya dukung tanah tinggi, serta memiliki aksesibilitas jaringan jalan yang sangat baik.
+                    </p>
+                </div>
+
+                <!-- Sesuai -->
+                <div class="p-2.5 bg-lime-50 border-l-4 border-lime-500 rounded-r shadow-sm">
+                    <div class="flex items-center space-x-1.5 font-bold text-lime-800 text-xs mb-1">
+                        <span class="w-2.5 h-2.5 rounded-full bg-lime-500"></span>
+                        <span>Sesuai (S2)</span>
+                    </div>
+                    <p class="text-[11px] text-gray-600 leading-relaxed">
+                        Lahan agak miring (lereng 8–15%) atau memiliki faktor pembatas ringan seperti jarak ke fasilitas agak jauh. Memerlukan penataan drainase atau rekayasa tapak ringan.
+                    </p>
+                </div>
+
+                <!-- Tidak Sesuai -->
+                <div class="p-2.5 bg-red-50 border-l-4 border-red-600 rounded-r shadow-sm">
+                    <div class="flex items-center space-x-1.5 font-bold text-red-800 text-xs mb-1">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+                        <span>Tidak Sesuai (N)</span>
+                    </div>
+                    <p class="text-[11px] text-gray-600 leading-relaxed">
+                        Lahan memiliki pembatas berat/permanen, seperti lereng curam (&gt; 25%), area rawan bencana (longsor/banjir), zona lindung, atau sempadan sungai.
+                    </p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Container Peta -->
+        <main class="flex-1 relative">
+            <div id="map" class="w-full h-full"></div>
+        </main>
+    </div>
+
+    <!-- Script Utama Peta -->
+    <script>
+        // Inisialisasi Peta
+        const map = L.map('map').setView([-5.39714, 105.26679], 12);
+
+        // Basemap OpenStreetMap
+        const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Basemap Esri Satellite
+        const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri'
+        });
+
+        L.control.layers({
+            "OpenStreetMap": osm,
+            "Satelit (Esri)": esriSat
+        }).addTo(map);
+
+        // Variabel Statistik (Hanya 1 deklarasi)
+        const landStats = {
+            "Sangat Sesuai": 0,
+            "Sesuai": 0,
+            "Tidak Sesuai": 0
+        };
+
+        // 1. Fungsi Penentu Warna
+        function getColor(value) {
+            if (value === null || value === undefined) return '#9CA3AF';
+            const val = value.toString().toLowerCase().trim();
+            
+            if (val.includes('sangat') || val === 's1' || val === '1') return '#15803d'; // Hijau Tua
+            if (val.includes('tidak') || val === 'n' || val === '3') return '#dc2626';  // Merah
+            if (val.includes('sesuai') || val === 's2' || val === '2') return '#84cc16';  // Hijau Muda
+            
+            return '#84cc16';
+        }
+
+        // 2. Fungsi Pembaca Atribut Otomatis
+        function getFeatureKelas(props) {
+            return props.Kesesuaian || props.kesesuaian || props.KESESUAIAN ||
+                   props.Klasifikas || props.KLASIFIKAS || props.Keterangan || props.KETERANGAN ||
+                   props.HASIL || props.Hasil || props.GRIDCODE || props.RASTERVALU || 
+                   props.RECLASS || props.Skor || props.SKOR || 'Sesuai';
+        }
+
+        // 3. Styling Poligon
+        function styleFeature(feature) {
+            const props = feature.properties;
+            const kelas = getFeatureKelas(props);
+            
+            return {
+                fillColor: getColor(kelas),
+                weight: 0.3,
+                opacity: 0.8,
+                color: '#ffffff',
+                fillOpacity: 0.75
+            };
+        }
+
+        // 4. Popup & Perhitungan Jumlah Poligon
+        function onEachFeature(feature, layer) {
+            const props = feature.properties;
+            const kelas = getFeatureKelas(props);
+            const luas = props.Luas_Ha || props.LUAS || props.luas_ha || props.Area || props.AREA || '-';
+
+            const val = kelas.toString().toLowerCase().trim();
+            if (val.includes('sangat') || val === 's1' || val === '1') {
+                landStats["Sangat Sesuai"]++;
+            } else if (val.includes('tidak') || val === 'n' || val === '3') {
+                landStats["Tidak Sesuai"]++;
+            } else {
+                landStats["Sesuai"]++;
+            }
+
+            layer.bindPopup(`
+                <div class="p-1 font-sans">
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded text-white mb-2 inline-block" style="background-color: ${getColor(kelas)}">
+                        Kelas: ${kelas}
+                    </span>
+                    <p class="text-xs text-gray-700 mt-1"><b>Luas Area:</b> ${luas} Ha</p>
+                    <hr class="my-1">
+                    <p class="text-[10px] text-gray-400">Analisis Kesesuaian Lahan Pemukiman</p>
+                </div>
+            `);
+        }
+
+        // Load Batas Administrasi
+        if (typeof json_ADMINISTRASI_AR_DESAKEL_1 !== 'undefined') {
+            L.geoJSON(json_ADMINISTRASI_AR_DESAKEL_1, {
+                style: {
+                    color: '#374151',
+                    weight: 1.2,
+                    dashArray: '3, 3',
+                    fillOpacity: 0
+                }
+            }).addTo(map);
+        }
+
+        // Load Data Kesesuaian Lahan
+        let landUseLayer;
+        if (typeof json_HASIL_2 !== 'undefined') {
+            landUseLayer = L.geoJSON(json_HASIL_2, {
+                style: styleFeature,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+
+            if (landUseLayer.getBounds().isValid()) {
+                map.fitBounds(landUseLayer.getBounds());
+            }
+        }
+
+        // Update Ringkasan Legenda
+        function renderSummary() {
+            const legendDiv = document.getElementById('legendContainer');
+            legendDiv.innerHTML = '';
+
+            const items = [
+                { title: 'Sangat Sesuai', color: '#15803d', count: landStats["Sangat Sesuai"] },
+                { title: 'Sesuai', color: '#84cc16', count: landStats["Sesuai"] },
+                { title: 'Tidak Sesuai', color: '#dc2626', count: landStats["Tidak Sesuai"] }
+            ];
+
+            items.forEach(item => {
+                legendDiv.innerHTML += `
+                    <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3.5 h-3.5 rounded-sm inline-block" style="background-color: ${item.color}"></span>
+                            <span class="text-gray-700 font-medium">${item.title}</span>
+                        </div>
+                        <span class="bg-gray-200 px-2 py-0.5 rounded text-gray-700 font-semibold">${item.count} Poligon</span>
+                    </div>
+                `;
+            });
+        }
+
+        renderSummary();
+
+        // Fitur Filter Dropdown Kelas
+        function filterByClass() {
+            const selectedValue = document.getElementById('classFilter').value.toLowerCase();
+            if (!landUseLayer) return;
+
+            landUseLayer.eachLayer(layer => {
+                const props = layer.feature.properties;
+                const kelas = getFeatureKelas(props).toString().toLowerCase().trim();
+
+                if (selectedValue === 'all') {
+                    layer.setStyle({ fillOpacity: 0.75, opacity: 0.8, weight: 0.3 });
+                } else if (selectedValue === 'sangat sesuai' && (kelas.includes('sangat') || kelas === 's1' || kelas === '1')) {
+                    layer.setStyle({ fillOpacity: 0.9, opacity: 1, weight: 1.5 });
+                } else if (selectedValue === 'tidak sesuai' && (kelas.includes('tidak') || kelas === 'n' || kelas === '3')) {
+                    layer.setStyle({ fillOpacity: 0.9, opacity: 1, weight: 1.5 });
+                } else if (selectedValue === 'sesuai' && kelas.includes('sesuai') && !kelas.includes('sangat') && !kelas.includes('tidak')) {
+                    layer.setStyle({ fillOpacity: 0.9, opacity: 1, weight: 1.5 });
+                } else {
+                    layer.setStyle({ fillOpacity: 0.05, opacity: 0.1, weight: 0.1 });
+                }
+            });
+        }
+    </script>
+</body>
+</html>
